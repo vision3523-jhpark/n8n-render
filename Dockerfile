@@ -1,15 +1,18 @@
 FROM n8nio/n8n:latest
 
-# 타임존 패키지 설치(로그/cron 정합성)
+# tzdata 설치 (베이스 이미지가 Debian/Ubuntu 계열임. apk(X) 아닌 apt(Y))
 USER root
-RUN apk add --no-cache tzdata
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tzdata \
+ && rm -rf /var/lib/apt/lists/*
 
-# 엔트리 스크립트 복사
-COPY entry.sh /entry.sh
-RUN chmod +x /entry.sh && chown node:node /entry.sh
+# 엔트리 스크립트 복사 + 실행권한
+COPY entry.sh /usr/local/bin/entry.sh
+RUN chmod +x /usr/local/bin/entry.sh \
+ && chown node:node /usr/local/bin/entry.sh
 
-# 기본 실행자 복귀
+# n8n 기본 유저로 실행
 USER node
 
-# n8n을 바로 실행하지 말고 엔트리 스크립트를 통해 실행
-CMD ["/entry.sh"]
+# entry.sh 통해 n8n 실행 (Start Command 필요 없음)
+ENTRYPOINT ["/usr/local/bin/entry.sh"]
