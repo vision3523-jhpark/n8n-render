@@ -3,28 +3,33 @@ set -eu
 
 echo "[boot] PORT=${PORT:-unset}"
 
-# 0) (중요) config가 0바이트거나 깨져 있으면 삭제
-#    - n8n은 이 파일이 없으면 환경변수로 설정을 읽습니다.
-if [ -f /home/node/.n8n/config ]; then
-  if [ ! -s /home/node/.n8n/config ]; then
-    echo "[boot] /home/node/.n8n/config is empty. Removing."
-    rm -f /home/node/.n8n/config || true
-  fi
+# config가 0바이트(깨짐)면 삭제 → 환경변수 기반으로 부팅
+if [ -f /home/node/.n8n/config ] && [ ! -s /home/node/.n8n/config ]; then
+  echo "[boot] /home/node/.n8n/config is empty. Removing."
+  rm -f /home/node/.n8n/config || true
 fi
 
-# 1) 디렉터리 준비 (root로 실행 중)
+# 디렉터리 준비 (root로 실행됨)
 umask 077
 mkdir -p /home/node/.n8n || true
-
-# 2) 가능하면 소유/권한 정리 (마운트 정책상 실패해도 계속 진행)
+# 권한 정리는 실패해도 계속 진행
 chown -R node:node /home/node/.n8n 2>/dev/null || true
 chmod 700 /home/node/.n8n 2>/dev/null || true
-# config 파일은 "존재할 때만" 권한만 조정 (생성/덮어쓰기 하지 않음)
 [ -f /home/node/.n8n/config ] && chmod 600 /home/node/.n8n/config 2>/dev/null || true
 
-# 3) Render 동적 포트를 n8n에 주입
-export N8N_PORT="${PORT:-5678}"
+# Render 동적 포트를 n8n에 주입
+N8N_PORT="${PORT:-5678}"
+export N8N_PORT
 echo "[boot] N8N_PORT=${N8N_PORT}"
 
-# 4) node 유저로 n8n 실행 (su-exec는 Alpine의 lightweight sudo)
-exec su-exec node n8n
+# su-exec/gosu가 있으면 node로 전환, 없으면 root로라도 기동
+if [ -x /sbin/su-exec ]; then
+  exec /sbin/su-exec node n8n
+elif command -v su-exec >/dev/null 2>&1; then
+  exec su-exec node n8n
+elif command -v gosu >/dev/null 2>&1; then
+  exec gosu node n8n
+else
+  echo "[boot] su-exec/gosu not found. Running as root (temporary)."
+  exec n8n
+fi
