@@ -1,15 +1,13 @@
 FROM n8nio/n8n:latest
 
-# Alpine이면 apk 사용
+# root로 필요한 패키지 설치
 USER root
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache tzdata su-exec \
+ && ln -sf /sbin/su-exec /usr/local/bin/su-exec
 
 # 엔트리 스크립트 복사 + 권한
 COPY entry.sh /usr/local/bin/entry.sh
-RUN chmod +x /usr/local/bin/entry.sh && chown node:node /usr/local/bin/entry.sh
+RUN chmod +x /usr/local/bin/entry.sh
 
-# 기본 유저 복귀
-USER node
-
-# entry.sh를 통해 n8n 실행 (동적 PORT 주입/권한 정리)
+# ENTRYPOINT는 root로 실행 (스크립트 안에서 node 전환)
 ENTRYPOINT ["/usr/local/bin/entry.sh"]
